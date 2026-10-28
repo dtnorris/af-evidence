@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:adventurefinder:schema:af-evidence-manifest:v0.1",
+  "title": "AdventureFinder Evidence Manifest v0.1",
+  "description": "Authoritative inventory and integrity metadata for one immutable AdventureFinder production-evidence bundle.",
+  "$comment": "Portable JSON Schema cannot enforce that member_count equals members.length or that member.path values are unique. Deterministic manifest validation must enforce both invariants in addition to this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "batch_id",
+    "bundle",
+    "member_count",
+    "members"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "af-evidence-manifest/v0.1"
+    },
+    "batch_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "bundle": {
+      "$ref": "#/$defs/bundle"
+    },
+    "member_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/member"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "bundleFilename": {
+      "allOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\\\]+$"
+        },
+        {
+          "not": {
+            "enum": [".", ".."]
+          }
+        }
+      ]
+    },
+    "batchRelativePosixPath": {
+      "allOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\).+$"
+        },
+        {
+          "not": {
+            "pattern": "(^|/)\\.\\.?(/|$)"
+          }
+        }
+      ]
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filename",
+        "format",
+        "profile_version",
+        "byte_size",
+        "sha256"
+      ],
+      "properties": {
+        "filename": {
+          "$ref": "#/$defs/bundleFilename"
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "byte_size",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/batchRelativePosixPath"
+        },
+        "byte_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}
