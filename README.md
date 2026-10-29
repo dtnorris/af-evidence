@@ -57,7 +57,7 @@ Ruby syntax requires Ruby 3.2 or newer (`Data.define`); only Ruby 4.0.6 was qual
 Runtime dependencies are Ruby standard libraries/RubyGems tar, sqlite3
 (`~> 2.9`), and an existing zstd executable. `AF_EVIDENCE_ZSTD` can select
 that executable. Missing/failed compression refuses; there is no installation
-or provider fallback. Tests additionally require Minitest `~> 5.0`.
+or provider fallback. Tests additionally require Minitest `~> 5.0` and Rake.
 
 Invalid evidence, unsafe destinations, stale indexes, identity conflicts and
 compression failures raise `AfEvidence::ValidationError < AfEvidence::Error`.
@@ -101,14 +101,20 @@ catalog role, method binding or historical locator is reinterpreted. PL alone
 interprets recovery with an already absent source under its previously trusted
 state; that fast path is not fresh authorization for another source.
 
-Run the generated mechanical/safety proof from this tree with existing gems:
+Run all component tests (mechanical, output safety and release proof) from this
+tree with existing gems:
 
 ```sh
-ruby -Ilib -r ./test/mechanical_proof_test.rb -r ./test/output_safety_test.rb -e '' -- --no-plugins --seed 1402
+rake
+# Equivalent explicit task; TESTOPTS supplies optional Minitest arguments:
+rake test TESTOPTS='--no-plugins --seed=1402'
 ```
 
 The explicit Minitest 5 activation and standard `--no-plugins` option avoid
-the inspected host's mixed-version plugin discovery. No framework is modified.
+the inspected host's mixed-version plugin discovery. The Rake task defaults to
+`--no-plugins`; include it when overriding `TESTOPTS`. It discovers
+`test/**/*_test.rb`, adds `lib` to the load path and fails if the tests fail.
+No framework is modified. The repository has no Gemfile; run `rake` directly.
 
 ## License and third-party notices
 

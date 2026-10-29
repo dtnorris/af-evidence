@@ -1,5 +1,6 @@
 Manifest.txt
 README.md
+Rakefile
 lib/af_evidence.rb
 lib/af_evidence/error.rb
 lib/af_evidence/evidence_bundle_builder.rb

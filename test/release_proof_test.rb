@@ -2,6 +2,8 @@
 
 require "af_evidence"
 gem "minitest", "~> 5.0"
+# Match the Rake task's plugin policy when this file runs directly through ACT.
+ENV["MT_NO_PLUGINS"] = "1"
 require "minitest/autorun"
 
 # Real owner negatives before Git, using generated binary/empty evidence only.
@@ -9,9 +11,9 @@ require "minitest/autorun"
 class ReleaseProofTest < Minitest::Test
   BATCH = "mechanical-release"
 
-  # Supplies a real store/check/report and bound release owner; cleans generated IO.
+  # Supplies a real store/check/report under a physical temporary root; cleans IO.
   def with_proof
-    Dir.mktmpdir("ev-release-controls-") do |world|
+    Dir.mktmpdir("ev-release-controls-", File.realpath(Dir.tmpdir)) do |world|
       source = File.join(world, "source")
       archive = File.join(world, "archive")
       evidence = File.join(archive, "evidence")
