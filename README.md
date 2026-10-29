@@ -43,6 +43,9 @@ overwriting an old identity.
 | `EvidenceIndexVerifier#verify!` | Canonical root/index; fresh logical rebuild comparison and counts/hash Result. |
 | `EvidenceIndexLookup#lookup` | Explicit index and nonempty exact filters; deterministic locator mappings. Lookup alone does not establish corpus validity. |
 | `EvidenceRetriever#extract_member!`, `#extract_run!` | Canonical root, validated locator(s) and a new output; MemberResult or RunResult with exact installed byte identities. |
+| `EvidenceStore#ensure_pair!`, `#rebuild_index!` | Explicit batch/source/canonical root/index; exact verified pair reuse or publication, then atomically installed independently rebuilt index, with legacy file/count receipts. |
+| `EvidenceEquivalenceChecker#verify!` | Explicit batch/source/canonical root/index; expanded inventory, real bundle/source, indexed batch inventory and whole-index rebuild checks. Result contains manifest/checks; Failure retains partial checks and original error. |
+| `EvidenceReleaseProof#verify!` | Explicit batch, physical source/archive/canonical roots, source digest, manifest/bundle/report file receipts, report schema and current index path; independently verified local HEAD and four kind/path/SHA-256/size records. |
 
 All classes are under `AfEvidence`. Lookup filters and result fields retain
 their predecessor names. Schema paths are
@@ -50,7 +53,7 @@ their predecessor names. Schema paths are
 `AfEvidence::EvidenceIndexBuilder::SCHEMA_PATH`; both resolve within this tree.
 `Manifest.txt` lists the extracted component files, including both schemas.
 
-Ruby syntax requires Ruby 3.1 or newer; only Ruby 4.0.6 was qualified here.
+Ruby syntax requires Ruby 3.2 or newer (`Data.define`); only Ruby 4.0.6 was qualified here.
 Runtime dependencies are Ruby standard libraries/RubyGems tar, sqlite3
 (`~> 2.9`), and an existing zstd executable. `AF_EVIDENCE_ZSTD` can select
 that executable. Missing/failed compression refuses; there is no installation
@@ -71,10 +74,32 @@ against a hostile actor replacing directories during a call.
 
 The paired pipeline adapter is responsible for selected-root/opt-in
 authorization and translating EV errors to existing pipeline exceptions. PL owns
-`ProductionEvidenceShadowWriter` receipts, equivalence/authoritative policy,
-finalization and two-phase expanded-source release. EV never marks an operation
-accepted or authorizes deletion of expanded evidence. No workload state,
-scoring acceptance, catalog role or method binding is reinterpreted.
+production modes/labels, authoritative versus diagnostic policy, completion,
+root eligibility and the durable two-phase expanded-source release state.
+The four mechanical checks and storage/publication implementation live only in EV.
+Optional equivalence reuse mappings are trusted in-process results from the real
+writer, not externally verifiable tokens. Release proof never uses them.
+
+`EvidenceReleaseProof#verify!` revalidates the exact pair against the bound source,
+the finalized report and current independently rebuilt index. It compares all
+four actual HEAD blobs, stage-zero index entries and working bytes/modes. The
+report's index hash describes its original verification; release validates the
+current index because the corpus can grow. Local HEAD proof establishes neither
+remote retention nor publication clearance.
+
+`EvidenceReleaseProof#release!` always repeats that proof and requires a block
+which validates the caller's bound durable authorization before deletion. PL's
+adapter rereads its exact persisted `release_authorized` state and compares the
+fresh HEAD/four records to that authorization. A serialized receipt is never
+passed to EV as permission to skip proof. The block is a trusted application
+authorization boundary, not an independent evidence verifier. No callback can
+substitute for EV's real checks. Callers must serialize writers; this is not a
+hostile-filesystem or power-loss transaction.
+
+EV never marks an operation accepted. No workload state, scoring acceptance,
+catalog role, method binding or historical locator is reinterpreted. PL alone
+interprets recovery with an already absent source under its previously trusted
+state; that fast path is not fresh authorization for another source.
 
 Run the generated mechanical/safety proof from this tree with existing gems:
 
