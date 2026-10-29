@@ -57,7 +57,13 @@ Ruby syntax requires Ruby 3.2 or newer (`Data.define`); only Ruby 4.0.6 was qual
 Runtime dependencies are Ruby standard libraries/RubyGems tar, sqlite3
 (`~> 2.9`), and an existing zstd executable. `AF_EVIDENCE_ZSTD` can select
 that executable. Missing/failed compression refuses; there is no installation
-or provider fallback. Tests additionally require Minitest `~> 5.0` and Rake.
+or provider fallback. Tests additionally require Minitest `~> 5.0`, Rake and
+SimpleCov `~> 0.22.0` (including its HTML and JSON formatters). Install the
+coverage dependency once if it is not already available:
+
+```sh
+gem install simplecov -v '~> 0.22.0' --no-document
+```
 
 Invalid evidence, unsafe destinations, stale indexes, identity conflicts and
 compression failures raise `AfEvidence::ValidationError < AfEvidence::Error`.
@@ -115,6 +121,17 @@ the inspected host's mixed-version plugin discovery. The Rake task defaults to
 `--no-plugins`; include it when overriding `TESTOPTS`. It discovers
 `test/**/*_test.rb`, adds `lib` to the load path and fails if the tests fail.
 No framework is modified. The repository has no Gemfile; run `rake` directly.
+
+Every `rake` or `rake test` invocation captures line and branch coverage during
+that same test process. `rake test:coverage` is an alias for `test`, so even
+`rake test test:coverage` executes the suite once. The shared ACT entry point is
+`ruby -Ilib:test test/run_tests.rb`; it also runs the suite once with coverage.
+
+Reports are written to ignored `coverage/index.html` and
+`coverage/coverage.json`. Coverage starts before production code loads, tracks
+all `lib/**/*.rb` files (including unloaded files), excludes tests and does not
+merge earlier runs. A failing test run still fails; report generation is not
+test acceptance. This change captures coverage without adding a threshold.
 
 ## License and third-party notices
 
