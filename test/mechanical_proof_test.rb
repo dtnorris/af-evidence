@@ -2,6 +2,8 @@
 
 require "af_evidence"
 gem "minitest", "~> 5.0"
+# Match the Rake task's plugin policy when this file runs directly through ACT.
+ENV["MT_NO_PLUGINS"] = "1"
 require "minitest/autorun"
 require "stringio"
 
@@ -13,9 +15,9 @@ class MechanicalProofTest < Minitest::Test
   RAW = "mechanical/runs/job/native/raw/ADV-TEST/run-one"
   BINARY = (0..255).to_a.pack("C*") + "\x00\xff".b
 
-  # Creates a disposable recognizable AFIO/native-run corpus; no external calls.
+  # Creates a disposable AFIO/native-run corpus under a physical temporary root.
   def with_corpus
-    Dir.mktmpdir("ev-real-zstd-") do |world|
+    Dir.mktmpdir("ev-real-zstd-", File.realpath(Dir.tmpdir)) do |world|
       source = File.join(world, "source")
       canonical = File.join(world, "evidence", BATCH)
       FileUtils.mkdir_p([source, canonical])

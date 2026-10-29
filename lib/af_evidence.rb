@@ -26,3 +26,7 @@ require_relative "af_evidence/evidence_index_builder"
 require_relative "af_evidence/evidence_index_lookup"
 require_relative "af_evidence/evidence_index_verifier"
 require_relative "af_evidence/evidence_retriever"
+
+require_relative "af_evidence/evidence_store"
+require_relative "af_evidence/evidence_equivalence_checker"
+require_relative "af_evidence/evidence_release_proof"

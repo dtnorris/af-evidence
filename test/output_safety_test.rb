@@ -2,13 +2,15 @@
 
 require "af_evidence"
 gem "minitest", "~> 5.0"
+# Match the Rake task's plugin policy when this file runs directly through ACT.
+ENV["MT_NO_PLUGINS"] = "1"
 require "minitest/autorun"
 
 # Local EV safety does not depend on pipeline authorization or environment.
 class OutputSafetyTest < Minitest::Test
-  # Provides disposable real directories and removes only the generated world.
+  # Uses a physical temporary root and removes only the generated world.
   def with_paths
-    Dir.mktmpdir("ev-output-safety-") do |world|
+    Dir.mktmpdir("ev-output-safety-", File.realpath(Dir.tmpdir)) do |world|
       evidence = File.join(world, "evidence")
       parent = File.join(world, "output")
       FileUtils.mkdir_p([evidence, parent])
