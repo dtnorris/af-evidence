@@ -1,0 +1,12 @@
+{
+  "schema": "af-evidence-coverage-baseline/v1",
+  "source": "Operator native rake run, seed 18387: 12 tests, 123 assertions, no failures/errors/skips",
+  "line": {
+    "covered": 1234,
+    "total": 1526
+  },
+  "branch": {
+    "covered": 319,
+    "total": 607
+  }
+}
