@@ -1,6 +1,15 @@
 Manifest.txt
+LICENSE
+Gemfile
+Gemfile.lock
+.simplecov
+COVERAGE.md
+coverage-baseline.json
 README.md
 Rakefile
+script/package.rb
+script/package_smoke.rb
+examples/first_store.rb
 lib/af_evidence.rb
 lib/af_evidence/error.rb
 lib/af_evidence/evidence_bundle_builder.rb
@@ -21,3 +30,4 @@ test/mechanical_proof_test.rb
 test/output_safety_test.rb
 test/release_proof_test.rb
 test/run_tests.rb
+test/source_package_test.rb
