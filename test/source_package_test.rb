@@ -9,7 +9,8 @@ require "minitest/autorun"
 
 # Tests packaging safety without loading EV, native gems, Git or private data.
 class SourcePackageTest < Minitest::Test
-  # Copies only reviewed source files into a generated physical root. Yields
+  # Copies reviewed source into a physical root with canonical fixture modes,
+  # retaining executable bits rather than incidental checkout permissions. Yields
   # source/output paths; cleans only its own fixture. Filesystem errors propagate.
   def with_source
     Dir.mktmpdir("ev-package-test-", File.realpath(Dir.tmpdir)) do |world|
@@ -20,6 +21,7 @@ class SourcePackageTest < Minitest::Test
         target = File.join(source, name)
         FileUtils.mkdir_p(File.dirname(target))
         FileUtils.copy_file(File.join(original, name), target, true)
+        File.chmod((File.stat(target).mode & 0o111).zero? ? 0o644 : 0o755, target)
       end
       yield source, File.join(world, "source.tar")
     end
