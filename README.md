@@ -1,24 +1,131 @@
 # af-evidence
 
-Standalone Ruby evidence storage for AdventureFinder: deterministic bundles,
-manifests, verification, indexing, lookup, and exact-byte retrieval.
+`af-evidence` is a Ruby library that stores the exact bytes of finalized
+AdventureFinder evidence batches. It writes a deterministic `.tar.zst` bundle
+and a JSON manifest for each batch, and builds a separate, rebuildable SQLite
+index for lookup and retrieval.
 
-This repository hosts the evidence mechanics extracted from af-data-pipeline
-`dfb87fa1912eeabdcac895cbf4cb7b0b474ff2f9`. The project is licensed under the
-MIT License; see [LICENSE](LICENSE) and the third-party notices below.
+Use the library directly when your Ruby code already has an expanded evidence
+batch or needs to verify, index, or retrieve evidence from a canonical store.
+[af-pipeline](https://github.com/dtnorris/af-pipeline) pins and calls this
+library for storage and retrieval in its operator workflow. The pipeline owns
+production authorization, review, and release decisions.
+
+## Store and retrieve your first member
+
+Start with two synthetic job/run metadata files and a three-byte payload. The
+example stores and verifies the batch, builds the index, and retrieves the
+payload by batch ID, run ID, and exact batch-relative member path. It checks
+that the retrieved file has the same length and SHA-256 as the source and
+that lookup for an unknown run returns no rows.
+
+Use Ruby 4.0, Bundler 4.0.17, Git, and `zstd` on your `PATH`. The anonymous
+HTTPS clone and installation of the locked runtime gems need access to GitHub
+and RubyGems. Run the whole block from any directory. It uses a fresh temporary
+directory and a clean environment for Git and Bundler settings, dependencies,
+source, store, and output. The example only uses the files it generates.
+
+```sh
+(
+set -eu
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/af-evidence.XXXXXXXX")
+scratch=$(cd "$scratch" && pwd -P)
+mkdir "$scratch/home" "$scratch/tmp"
+env -i PATH="$PATH" HOME="$scratch/home" TMPDIR="$scratch/tmp" \
+  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 \
+  BUNDLE_IGNORE_CONFIG=true BUNDLE_FROZEN=true BUNDLE_WITHOUT=development:test \
+  BUNDLE_PATH="$scratch/gems" sh -eu -s "$scratch" <<'SH'
+cd "$1"
+git -c credential.helper= clone https://github.com/dtnorris/af-evidence.git
+cd af-evidence
+bundle _4.0.17_ install
+bundle _4.0.17_ exec ruby -Ilib - "$1" <<'RUBY'
+require "af_evidence"
+
+scratch = ARGV.fetch(0)
+source = File.join(scratch, "source")
+evidence = File.join(scratch, "evidence")
+index = File.join(scratch, "index.sqlite")
+batch_id = "example-batch"
+run_id = "run-one"
+job = "mechanical/runs/job"
+run = "#{job}/native/raw/ADV-TEST/#{run_id}"
+member_path = "#{run}/payload.bin"
+input = File.join(source, member_path)
+
+FileUtils.mkdir_p(File.join(source, run))
+File.write(File.join(source, job, "metadata.json"), JSON.generate(
+  job_id: "job", adventure: "ADV-TEST", dimension: "mechanical", status: "complete"))
+File.write(File.join(source, run, "run_metadata.json"), JSON.generate(
+  run_id: run_id, adventure_id: "ADV-TEST", selected_dimension: "mechanical"))
+File.binwrite(input, "\x00\xff\n".b)
+
+store = AfEvidence::EvidenceStore.new(batch_id: batch_id, source_root: source,
+  evidence_root: evidence, index_path: index)
+pair = store.ensure_pair!
+abort "Batch verification failed" unless pair.fetch("source_verified") && pair.fetch("member_count") == 3
+abort "Index verification failed" unless store.rebuild_index!.fetch("verified")
+puts "Verified batch #{batch_id} and rebuilt its index"
+
+lookup = AfEvidence::EvidenceIndexLookup.new(index_path: index)
+rows = lookup.lookup(batch_id: batch_id, run_id: run_id)
+locator = rows.find { |row| row.fetch("member_path") == member_path }
+abort "Member not found: #{member_path}" unless locator
+
+output = File.join(scratch, "retrieved.bin")
+result = AfEvidence::EvidenceRetriever.new(evidence_root: evidence).extract_member!(
+  locator: locator, output_path: output)
+size = File.size(input)
+sha256 = Digest::SHA256.file(input).hexdigest
+abort "Retrieved size differs" unless File.size(output) == size && result.byte_size == size
+abort "Retrieved SHA-256 differs" unless Digest::SHA256.file(output).hexdigest == sha256 && result.sha256 == sha256
+puts "Retrieved #{result.batch_id} / #{result.run_id} / #{result.member_path}"
+puts "#{size} bytes, SHA-256 #{sha256}"
+
+abort "Unexpected rows for missing run" unless lookup.lookup(batch_id: batch_id, run_id: "missing-run").empty?
+puts "Missing run returned no rows"
+puts "Output: #{output}"
+RUBY
+SH
+)
+```
+
+Expect `Verified batch example-batch and rebuilt its index`, a retrieval for
+`example-batch / run-one / mechanical/runs/job/native/raw/ADV-TEST/run-one/payload.bin`,
+`3 bytes, SHA-256 712450d3c4a79eea9509e75dc1dacdeff58034df538536cfae2da882bd8a0c50`,
+and `Missing run returned no rows`. The printed output path is inside the
+temporary directory alongside the original source, `evidence/example-batch/`
+with its manifest and bundle, and `index.sqlite`. Remove that temporary
+directory when you are done.
+
+Lookup takes exact filters such as `batch_id` and `run_id`. A run can contain
+more than one file; select the exact `member_path` from the returned rows and
+pass that locator to the retriever.
+
+## Library reference
+
+The [public v0.1 storage contract](https://github.com/dtnorris/af-pipeline/blob/54fd38b3ba779275ef2c5fed536439434779d262/docs/EVIDENCE_STORAGE_CONTRACT_V0.1.md)
+governs representation and compatibility, including AFIO/native-run and legacy
+Levels evidence. This README describes the library entry points and ownership
+boundary.
+
+### Extraction and package history
+
+The evidence mechanics were extracted from af-data-pipeline at
+`dfb87fa1912eeabdcac895cbf4cb7b0b474ff2f9`. The
+[original frozen contract](https://github.com/dtnorris/af-pipeline-data/blob/dfb87fa1912eeabdcac895cbf4cb7b0b474ff2f9/docs/EVIDENCE_STORAGE_CONTRACT_V0.1.md)
+is retained in the private predecessor repository for readers with access.
 
 OS-EV-03 accepted the paired EV implementation at
 `4be62c5baa491e42c2d9b65dc72f5bf2e0647707` and pipeline adapter at
 `7b3572dfde0a59763681b9dffbd42455fed53542`. That historical acceptance does
-not qualify a new package or establish installed consumer state. This tree
-supports a privately reviewed source archive; no registry gem, public acquisition
-channel or versioned release is provided here. Packaging does not establish
-rights clearance, installed migration or publication approval.
+not qualify a new package or establish installed consumer state. OS-EV-04
+documented a privately reviewed source archive. Its procedure remains available
+under [Private source package and first store](#private-source-package-and-first-store).
+Packaging does not establish rights clearance, installed migration or publication
+approval. The public walkthrough uses the source checkout.
 
-The frozen [v0.1 storage contract](https://github.com/dtnorris/af-data-pipeline/blob/dfb87fa1912eeabdcac895cbf4cb7b0b474ff2f9/docs/EVIDENCE_STORAGE_CONTRACT_V0.1.md)
-governs representation and historical compatibility. This README defines the
-component entry points and responsibility boundary; it does not change that
-profile, AFIO/native-run or legacy Levels interpretation.
+### Ruby entry points
 
 Supply this tree's `lib` explicitly on Ruby's load path:
 
@@ -60,10 +167,10 @@ schemas, dependency files, test/coverage support, license and this README's noti
 
 ## Private source package and first store
 
+This procedure is for operators reviewing the private source distribution.
 Obtain the complete reviewed candidate from its operator handoff, and verify its
-patch/package SHA-256 before use. Public installation is not part of this
-procedure. From the candidate root, one command builds an allowlisted tar and
-prints its file inventory, modes, sizes and SHA-256 values:
+patch/package SHA-256 before use. From the candidate root, one command builds an
+allowlisted tar and prints its file inventory, modes, sizes and SHA-256 values:
 
 ```sh
 ruby script/package.rb /ABSOLUTE/NEW/SCRATCH/af-evidence-source.tar > /ABSOLUTE/NEW/SCRATCH/inventory.json
@@ -87,9 +194,9 @@ provision missing dependencies separately; none of these commands installs them.
 The accepted EV history qualified Ruby 4.0.6. The OS-EV-04 worker observed
 Ruby 4.0.9 / arm64-darwin27, Bundler 4.0.17 and zstd 1.5.7, but its locked
 csv/sqlite3 and coverage gems were unavailable, and nested sandbox execution
-was denied. Thus the new fresh-root runtime journey and coverage gates remain
-unqualified pending host execution. Other runtimes/platforms are unqualified;
-lockfile platform entries alone are not test results.
+was denied. At that handoff, the fresh-root package journey and coverage gates
+were pending host execution. The lockfile platform entries describe dependency
+resolution. Runtime and platform qualification requires observed gate results.
 
 The following zsh walkthrough uses a new physical scratch root, the reviewed
 local archive, and installed external dependencies. Replace the two artifact
@@ -115,12 +222,13 @@ env -u RUBYLIB -u RUBYOPT BUNDLE_IGNORE_CONFIG=true BUNDLE_FROZEN=true \
 Stop on any failed command. `AF_EVIDENCE_ZSTD=/absolute/path/to/zstd` selects
 an external executable for the example and smoke gate; check that selected
 executable with `--version` instead of the plain `zstd` command. Missing/failed
-compression refuses; no installer or alternate provider is invoked. The example
-uses the real owner methods and generated metadata, binary and empty files. It
-creates a previously absent scratch directory and an initially empty evidence
-root, then writes the first canonical pair, verifies against source, builds and
-queries the index, retrieves exact bytes, and deletes/rebuilds only its disposable
-derived index. It compares logical rows and source/pair hashes/modes and prints
+compression refuses; no installer or alternate provider is invoked. The
+[package example](examples/first_store.rb) uses the real owner methods and
+generated metadata, binary and empty files. It creates a previously absent
+scratch directory and an initially empty evidence root, then writes the first
+canonical pair, verifies against source, builds and queries the index, retrieves
+exact bytes, and deletes/rebuilds only its disposable derived index. It compares
+logical rows and source/pair hashes/modes and prints
 loaded EV features, dependency roots, schema paths/hashes and resulting identities.
 The manifest JSON schema is read in example preflight; EV itself retains its
 existing validation and schema resolution semantics. Empty input remains invalid.
@@ -148,6 +256,8 @@ both schema failures, existing mechanical refusal tests, exact restoration and a
 repeat positive. Each command prints argv, cwd, exit/signal, duration and bounded
 streams. Scratch results are retained at the printed path for review. Run the
 gate against the final archive bytes; historical EV tests do not qualify them.
+
+## Responsibility and safety
 
 Invalid evidence, unsafe destinations, stale indexes, identity conflicts and
 compression failures raise `AfEvidence::ValidationError < AfEvidence::Error`.
@@ -190,6 +300,8 @@ EV never marks an operation accepted. No workload state, scoring acceptance,
 catalog role, method binding or historical locator is reinterpreted. PL alone
 interprets recovery with an already absent source under its previously trusted
 state; that fast path is not fresh authorization for another source.
+
+## Component tests
 
 Run all component tests (mechanical, output safety and release proof) from this
 tree with existing gems:
